@@ -6,6 +6,12 @@ const express = require("express");
 const app = express();
 const fs = require("fs");
 require("dotenv").config();
+const cors = require("cors");
+app.use(
+	cors({
+		origin: "*",
+	})
+);
 
 const client = new Client({
 	node: process.env.ELASTIC_ENDPOINT,
