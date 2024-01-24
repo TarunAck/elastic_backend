@@ -1,6 +1,6 @@
 const { Client } = require("@elastic/elasticsearch");
 const redis = require("redis");
-let dataJson = require("./recordsSampleNew.json");
+// let dataJson = require("./recordsSampleNew.json");
 const index = "nft_test_index";
 const express = require("express");
 const app = express();
