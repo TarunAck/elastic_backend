@@ -98,8 +98,13 @@ app.get("/addBulkData", async (req, res) => {
 
 //middleware to get data from redis cache
 async function cache(req, res, next) {
-	const { nftName } = req.query;
-	const data = await redisClient.get(nftName);
+	const { nftName, other } = req.query;
+	let data;
+	if (nftName) {
+		data = await redisClient.get("name_" + nftName);
+	} else if (other) {
+		data = await redisClient.get("other_" + other);
+	}
 	if (data) {
 		res.send(JSON.parse(data));
 	} else {
@@ -109,23 +114,50 @@ async function cache(req, res, next) {
 
 //code to get data from elastic search and store in redis cache
 app.get("/getData", cache, async (req, res) => {
-	const { nftName } = req.query;
-	//remove hyphens and add spaces
-	const data = await client.search({
-		index: index,
-		body: {
-			query: {
-				match: {
-					token_name: {
-						query: nftName,
+	const { nftName, other } = req.query;
+	if (nftName) {
+		try {
+			//remove hyphens and add spaces
+			const data = await client.search({
+				index: index,
+				body: {
+					query: {
+						match: {
+							token_name: {
+								query: nftName,
+							},
+						},
 					},
 				},
-			},
-		},
-	});
+			});
+			res.send(data);
+			await redisClient.setEx("name_" + nftName, 3600, JSON.stringify(data));
+		} catch (error) {
+			console.log(error);
+			res.status(400).send("Failed");
+		}
+	} else if (other) {
+		try {
+			const data = await client.search({
+				index: index,
+				body: {
+					query: {
+						multi_match: {
+							query: other,
+							fields: "*",
+						},
+					},
+				},
+			});
+			res.send(data);
+			await redisClient.setEx("other_" + other, 3600, JSON.stringify(data));
+		} catch (error) {
+			console.log(error);
+			res.status(400).send("Failed");
+		}
+	}
 	// await redisClient.set(nftName, JSON.stringify(data), "EX", 60);
-	await redisClient.setEx(nftName, 3600, JSON.stringify(data));
-	res.send(data);
+	// res.send(data);
 	//code to retrieve data from elastic search
 });
 
