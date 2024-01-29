@@ -1,4 +1,5 @@
 const { Client } = require("@elastic/elasticsearch");
+const { CovalentClient } = require("@covalenthq/client-sdk");
 const redis = require("redis");
 // let dataJson = require("./recordsSampleNew.json");
 const index = "nft_test_index";
@@ -111,6 +112,73 @@ async function cache(req, res, next) {
 		next();
 	}
 }
+
+//middleware to check if address is valid
+const checkAddress = async (req, res, next) => {
+	const { address } = req.query;
+	const check = await client.search({
+		index: index,
+		body: {
+			query: {
+				match: {
+					contract_address: {
+						query: address,
+					},
+				},
+			},
+		},
+	});
+	if (check.hits.total.value > 0) {
+		return res.status(400).send("Address already exists");
+	}
+	next();
+};
+
+const json = (param) => {
+	return JSON.stringify(
+		param,
+		(key, value) => (typeof value === "bigint" ? value.toString() : value) // return everything else unchanged
+	);
+};
+
+app.get("/addData", async (req, res) => {
+	const { address, chainName } = req.query;
+	const covalentClient = new CovalentClient(process.env.COVALENT_API_KEY);
+	const resp = await covalentClient.NftService.getNftsForAddress(
+		chainName,
+		"0x0ffa87cd27ae121b10b3f044dda4d28f9fb8f079"
+	);
+	const nfts = JSON.parse(json(resp.data.items));
+	for (const nft of nfts) {
+		const document = {
+			token_id: nft.nft_data[0].token_id,
+			token_url: nft.nft_data[0].token_url,
+			token_name: nft.nft_data[0].external_data.name,
+			image_url: nft.nft_data[0].external_data.image,
+			description: nft.nft_data[0].external_data.description,
+			properties: nft.nft_data[0].external_data.attributes,
+			creator: address,
+			owner: nft.nft_data[0].original_owner,
+			location: "",
+			priceURI: "",
+			transactionURI: "",
+			contract_address: address,
+			orgName: nft.contract_ticker_symbol,
+		};
+		console.log(document);
+		try {
+			await client.index({
+				index: index,
+				body: document,
+			});
+		} catch (error) {
+			console.log(error);
+			return res.status(400).send("Failed");
+		}
+	}
+
+	res.send("added successfully");
+});
 
 //code to get data from elastic search and store in redis cache
 app.get("/getData", cache, async (req, res) => {
