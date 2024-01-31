@@ -143,15 +143,20 @@ const json = (param) => {
 
 app.get("/addData", async (req, res) => {
 	const { address, chainName } = req.query;
+
 	const covalentClient = new CovalentClient(process.env.COVALENT_API_KEY);
 	const resp = await covalentClient.NftService.getNftsForAddress(
 		chainName,
 		address
 	);
+	if (resp.error) {
+		return res.status(400).send("Invalid Address");
+	}
 	const nfts = JSON.parse(json(resp.data.items));
 	if (nfts.length === 0) {
 		return res.status(400).send("No NFTs found");
 	}
+	const bulkDocument = [];
 	for (const nft of nfts) {
 		console.log(nft);
 		for (const nftData of nft.nft_data) {
@@ -185,18 +190,30 @@ app.get("/addData", async (req, res) => {
 				console.log("already exists " + document.token_id);
 				continue;
 			} else {
-				console.log("adding " + document.token_id);
+				bulkDocument.push(document);
 			}
-			try {
-				await client.index({
-					index: index,
-					body: document,
-				});
-			} catch (error) {
-				console.log(error);
-				return res.status(400).send("Failed");
-			}
+			// try {
+			// 	await client.index({
+			// 		index: index,
+			// 		body: document,
+			// 	});
+			// } catch (error) {
+			// 	console.log(error);
+			// 	return res.status(400).send("Failed");
+			// }
 		}
+	}
+	try {
+		await client.helpers.bulk({
+			datasource: bulkDocument,
+			pipeline: "ent-search-generic-ingestion",
+			onDocument: (doc) => ({
+				index: { _index: "nft_test_index" },
+			}),
+		});
+	} catch (error) {
+		console.error("Error during bulk indexing:", error);
+		return res.status(400).send("Failed");
 	}
 
 	res.send("added successfully");
