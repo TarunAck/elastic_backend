@@ -153,48 +153,49 @@ app.get("/addData", async (req, res) => {
 		return res.status(400).send("No NFTs found");
 	}
 	for (const nft of nfts) {
-		const document = {
-			token_id: nft.nft_data[0].token_id,
-			token_url: nft.nft_data[0].token_url,
-			token_name: nft.nft_data[0].external_data.name,
-			image_url: nft.nft_data[0].external_data.image,
-			description: nft.nft_data[0].external_data.description,
-			properties: nft.nft_data[0].external_data.attributes,
-			creator: address,
-			owner: nft.nft_data[0].original_owner,
-			location: "",
-			priceURI: "",
-			transactionURI: "",
-			contract_address: address,
-			orgName: nft.contract_ticker_symbol,
-		};
-		const check = await client.search({
-			index: index,
-			body: {
-				query: {
-					match: {
-						token_id: {
-							query: document.token_id,
+		console.log(nft);
+		for (const nftData of nft.nft_data) {
+			const document = {
+				token_id: nftData.token_id,
+				token_url: nftData.token_url,
+				token_name: nftData.external_data?.name,
+				image_url: nftData.external_data?.image,
+				description: nftData.external_data?.description,
+				properties: nftData.external_data?.attributes,
+				owner: nftData.original_owner,
+				location: "",
+				priceURI: "",
+				transactionURI: "",
+				contract_address: nft.contract_address,
+				orgName: nft.contract_ticker_symbol,
+			};
+			const check = await client.search({
+				index: index,
+				body: {
+					query: {
+						match: {
+							token_id: {
+								query: document.token_id,
+							},
 						},
 					},
 				},
-			},
-		});
-		if (check.hits.total.value > 0) {
-			console.log("already exists " + document.token_id);
-			continue;
-		} else {
-			console.log("adding " + document.token_id);
-		}
-		console.log(document);
-		try {
-			await client.index({
-				index: index,
-				body: document,
 			});
-		} catch (error) {
-			console.log(error);
-			return res.status(400).send("Failed");
+			if (check.hits.total.value > 0) {
+				console.log("already exists " + document.token_id);
+				continue;
+			} else {
+				console.log("adding " + document.token_id);
+			}
+			try {
+				await client.index({
+					index: index,
+					body: document,
+				});
+			} catch (error) {
+				console.log(error);
+				return res.status(400).send("Failed");
+			}
 		}
 	}
 
