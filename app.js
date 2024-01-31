@@ -146,9 +146,12 @@ app.get("/addData", async (req, res) => {
 	const covalentClient = new CovalentClient(process.env.COVALENT_API_KEY);
 	const resp = await covalentClient.NftService.getNftsForAddress(
 		chainName,
-		"0x0ffa87cd27ae121b10b3f044dda4d28f9fb8f079"
+		address
 	);
 	const nfts = JSON.parse(json(resp.data.items));
+	if (nfts.length === 0) {
+		return res.status(400).send("No NFTs found");
+	}
 	for (const nft of nfts) {
 		const document = {
 			token_id: nft.nft_data[0].token_id,
@@ -165,6 +168,24 @@ app.get("/addData", async (req, res) => {
 			contract_address: address,
 			orgName: nft.contract_ticker_symbol,
 		};
+		const check = await client.search({
+			index: index,
+			body: {
+				query: {
+					match: {
+						token_id: {
+							query: document.token_id,
+						},
+					},
+				},
+			},
+		});
+		if (check.hits.total.value > 0) {
+			console.log("already exists " + document.token_id);
+			continue;
+		} else {
+			console.log("adding " + document.token_id);
+		}
 		console.log(document);
 		try {
 			await client.index({
@@ -224,9 +245,6 @@ app.get("/getData", cache, async (req, res) => {
 			res.status(400).send("Failed");
 		}
 	}
-	// await redisClient.set(nftName, JSON.stringify(data), "EX", 60);
-	// res.send(data);
-	//code to retrieve data from elastic search
 });
 
 //code to get all data from elastic search
