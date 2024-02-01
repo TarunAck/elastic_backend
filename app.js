@@ -1,7 +1,7 @@
 const { Client } = require("@elastic/elasticsearch");
 const { CovalentClient } = require("@covalenthq/client-sdk");
 const redis = require("redis");
-// let dataJson = require("./recordsSampleNew.json");
+let dataJson = require("./recordsSampleNew.json");
 const index = "nft_test_index";
 const express = require("express");
 const app = express();
@@ -75,11 +75,21 @@ app.get("/ping", async (req, res) => {
 app.get("/addBulkData", async (req, res) => {
 	const bulkBody = [];
 	for (const data of dataJson) {
-		const documentWithoutId = { ...data };
-		documentWithoutId["id"] = documentWithoutId["_id"]["$oid"];
-		delete documentWithoutId["_id"];
-
-		bulkBody.push(documentWithoutId);
+		const document = {
+			token_id: data.token_id,
+			token_url: data.tokenURI,
+			token_name: data.token_name,
+			image_url: data.imageUrl,
+			description: data.description,
+			properties: data.properties,
+			owner: data.owner,
+			location: "",
+			priceURI: "",
+			transactionURI: "",
+			contract_address: data.contract_address,
+			orgName: data.orgName,
+		};
+		bulkBody.push(document);
 	}
 
 	try {
@@ -143,7 +153,6 @@ const json = (param) => {
 
 app.get("/addData", async (req, res) => {
 	const { address, chainName } = req.query;
-
 	const covalentClient = new CovalentClient(process.env.COVALENT_API_KEY);
 	const resp = await covalentClient.NftService.getNftsForAddress(
 		chainName,
@@ -158,7 +167,6 @@ app.get("/addData", async (req, res) => {
 	}
 	const bulkDocument = [];
 	for (const nft of nfts) {
-		console.log(nft);
 		for (const nftData of nft.nft_data) {
 			const document = {
 				token_id: nftData.token_id,
@@ -174,35 +182,36 @@ app.get("/addData", async (req, res) => {
 				contract_address: nft.contract_address,
 				orgName: nft.contract_ticker_symbol,
 			};
-			const check = await client.search({
-				index: index,
-				body: {
-					query: {
-						match: {
-							token_id: {
-								query: document.token_id,
-							},
-						},
-					},
-				},
-			});
-			if (check.hits.total.value > 0) {
-				console.log("already exists " + document.token_id);
-				continue;
-			} else {
-				bulkDocument.push(document);
-			}
-			// try {
-			// 	await client.index({
-			// 		index: index,
-			// 		body: document,
-			// 	});
-			// } catch (error) {
-			// 	console.log(error);
-			// 	return res.status(400).send("Failed");
-			// }
+			bulkDocument.push(document);
 		}
 	}
+	bulkDocument.filter(async (item, index) => {
+		const check = await client.search({
+			index: "nft_test_index",
+			body: {
+				query: {
+					bool: {
+						must: {
+							match: {
+								token_id: item.token_id,
+							},
+						},
+						filter: [
+							{
+								term: { contract_address: item.contract_address },
+							},
+						],
+					},
+				},
+			},
+		});
+		if (check.hits.total.value > 0) {
+			console.log("already exists " + item.token_id);
+			return false;
+		} else {
+			return true;
+		}
+	});
 	try {
 		await client.helpers.bulk({
 			datasource: bulkDocument,
