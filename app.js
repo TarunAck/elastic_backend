@@ -1,7 +1,7 @@
 const { Client } = require("@elastic/elasticsearch");
 const { CovalentClient } = require("@covalenthq/client-sdk");
 const redis = require("redis");
-let dataJson = require("./recordsSampleNew.json");
+// let dataJson = require("./recordsSampleNew.json");
 const index = "nft_test_index";
 const express = require("express");
 const app = express();
